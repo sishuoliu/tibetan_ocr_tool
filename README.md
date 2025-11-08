@@ -84,7 +84,7 @@ Done!
   Processed: 150
   Skipped (already exist): 0
   Failed: 0
-  Output folder: C:\path\to\your\images\ocr
+  Combined file: your_images_all_ocr.txt
 ```
 
 ---
@@ -135,15 +135,6 @@ python ocr_simple_batch.py "C:\path\to\images" --timeout-ms 30000
 
 ---
 
-## File Structure / 文件结构
-
-```
-tibetan_ocr_tool/
-├── ocr_simple_batch.py          # Main batch script / 主批处理脚本
-├── ocr_dharmamitra_playwright.py # Core OCR engine / 核心 OCR 引擎
-├── requirements.txt              # Python dependencies / Python 依赖
-└── README.md                     # This file / 本文件
-```
 
 ---
 

@@ -14,12 +14,8 @@ IMPORTANT:
   3) Wait for Tibetan characters to appear and then persist the extracted text.
 - Use responsibly and in accordance with the website’s terms of use.
 
-Usage examples (PowerShell):
-  # Single image test
-  python scripts/ocr_dharmamitra_playwright.py --image "sources\\pics\\folderA\\page01.png"
-
-  # Batch over a directory
-  python scripts/ocr_dharmamitra_playwright.py --input-dir "sources\\pics" --output-dir "sources\\ocr" --recursive
+This is a core module used by ocr_simple_batch.py. 
+Users should use ocr_simple_batch.py instead of calling this directly.
 """
 from __future__ import annotations
 
