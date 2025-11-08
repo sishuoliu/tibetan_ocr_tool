@@ -49,3 +49,13 @@ desktop.ini
 ocr/
 *_all_ocr.txt
 
+# Test files and examples (optional - uncomment if you don't want to track these)
+# test/
+# examples/
+# sample_images/
+
+# Configuration files (if any)
+# config.ini
+# settings.json
+# .env
+
