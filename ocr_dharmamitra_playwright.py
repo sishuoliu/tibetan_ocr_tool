@@ -30,6 +30,14 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 
 OCR_URL_DEFAULT = "https://dharmamitra.org/zh-hant?view=ocr"
 TIBETAN_REGEX = re.compile(r"[\u0F00-\u0FFF]+")
+# Common error/empty page indicators (case-insensitive)
+ERROR_INDICATORS = [
+    r"白\s*页", r"空白", r"无内容", r"无文字", r"无文本",
+    r"Result:", r"Error", r"失败", r"错误",
+    r"未识别", r"识别失败", r"无法识别",
+    r"请上传", r"请选择", r"Please upload", r"Please select",
+]
+ERROR_PATTERN = re.compile("|".join(ERROR_INDICATORS), re.IGNORECASE)
 DESKTOP_CHROME_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -309,6 +317,7 @@ def robust_upload_image(page, image_path: Path, timeout_ms: int = 12000) -> None
 def wait_for_tibetan_text(page, timeout_ms: int = 15000) -> str:
     """
     Wait until Tibetan characters appear in the page text, then return extracted Tibetan lines.
+    If error indicators are detected (e.g., "白页", "Result:"), raise an error immediately.
     """
     page.wait_for_timeout(500)
     elapsed = 0
@@ -318,6 +327,16 @@ def wait_for_tibetan_text(page, timeout_ms: int = 15000) -> str:
             body_text = page.inner_text("body")
         except Exception:
             body_text = ""
+        
+        # Check for error/empty page indicators first
+        if ERROR_PATTERN.search(body_text):
+            # Extract the error message for better diagnostics
+            error_lines = [line.strip() for line in body_text.splitlines() 
+                          if ERROR_PATTERN.search(line) and line.strip()]
+            error_msg = "; ".join(error_lines[:3]) if error_lines else "Error indicator detected"
+            raise ValueError(f"OCR returned error/empty page indicator: {error_msg}")
+        
+        # Check for Tibetan text
         if TIBETAN_REGEX.search(body_text):
             # Extract lines containing Tibetan
             lines = []
@@ -331,7 +350,12 @@ def wait_for_tibetan_text(page, timeout_ms: int = 15000) -> str:
                 if l not in seen:
                     seen.add(l)
                     uniq.append(l)
-            return "\n".join(uniq).strip()
+            result = "\n".join(uniq).strip()
+            # Double-check: if result is empty or only contains non-Tibetan, it's likely an error
+            if not result or not TIBETAN_REGEX.search(result):
+                raise ValueError("OCR completed but no Tibetan text was extracted")
+            return result
+        
         page.wait_for_timeout(step)
         elapsed += step
     raise PlaywrightTimeout("Timed out waiting for Tibetan OCR text to appear.")

@@ -14,6 +14,9 @@ Usage (PowerShell):
   # Verbose output
   python ocr_simple_batch.py "C:\path\to\images" --verbose
 
+  # Parallel processing (faster for large batches)
+  python ocr_simple_batch.py "C:\path\to\images" --workers 8
+
 Features:
 - Automatically creates <image_folder>/ocr/ subfolder
 - Recursively finds all images (PNG, JPG, TIF, etc.)
@@ -21,12 +24,15 @@ Features:
 - Reuses existing OCR results if .txt already exists (skip re-processing)
 - Converts TIF to PNG for better compatibility
 - Headless mode (no browser window) by default
+- Parallel processing support (default: 4 workers) for faster batch processing
 """
 from __future__ import annotations
 
 import argparse
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from threading import Lock
 from typing import List
 
 # Import from same directory
@@ -96,6 +102,9 @@ Examples:
 
   # Verbose output
   python ocr_simple_batch.py "C:\\path\\to\\images" --verbose
+
+  # Parallel processing (faster for large batches)
+  python ocr_simple_batch.py "C:\\path\\to\\images" --workers 8
         """,
     )
     parser.add_argument(
@@ -141,6 +150,12 @@ Examples:
         action="store_true",
         help="Also create individual .txt files in ocr/ folder (default: only combined file)",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=4,
+        help="Number of parallel workers for OCR processing (default: 4)",
+    )
     args = parser.parse_args(argv)
 
     image_folder = args.image_folder.resolve()
@@ -176,12 +191,18 @@ Examples:
     tmp_dir = ocr_output_dir / ".tmp_conversions"
     tmp_dir.mkdir(parents=True, exist_ok=True)
 
-    # Process each image
+    # Thread-safe counters and progress tracking
+    processed_lock = Lock()
     processed = 0
     skipped = 0
     failed = 0
+    total = len(images)
 
-    for i, img_path in enumerate(images, 1):
+    def process_single_image(args_tuple):
+        """Process a single image - designed for parallel execution."""
+        i, img_path, args, image_folder, ocr_output_dir, tmp_dir = args_tuple
+        nonlocal processed, skipped, failed
+        
         # Determine output TXT path (preserve relative structure if recursive)
         if args.no_recursive:
             out_txt = ocr_output_dir / (img_path.stem + ".txt")
@@ -195,8 +216,10 @@ Examples:
         # But we still need to track it for the combined file
         if args.individual_files and not args.force and out_txt.exists():
             if args.verbose:
-                print(f"[{i}/{len(images)}] Skipped (exists): {img_path.name}")
-            skipped += 1
+                with processed_lock:
+                    print(f"[{i}/{total}] Skipped (exists): {img_path.name}")
+            with processed_lock:
+                skipped += 1
             # Still process for combined file, but read from existing file
             try:
                 existing_content = out_txt.read_text(encoding="utf-8", errors="ignore")
@@ -205,11 +228,12 @@ Examples:
                 temp_content_file.write_text(existing_content, encoding="utf-8")
             except Exception:
                 pass
-            continue
+            return (img_path, True, None)  # (path, skipped, error)
 
         try:
             if args.verbose:
-                print(f"[{i}/{len(images)}] Processing: {img_path.name}")
+                with processed_lock:
+                    print(f"[{i}/{total}] Processing: {img_path.name}")
 
             # Convert TIF to PNG if needed
             upload_path = convert_image_for_upload(img_path, tmp_dir, verbose=args.verbose)
@@ -235,11 +259,13 @@ Examples:
                 if result_txt != out_txt:
                     out_txt.write_text(ocr_content, encoding="utf-8")
                     if args.verbose:
-                        print(f"  -> Saved: {out_txt.relative_to(image_folder)}")
+                        with processed_lock:
+                            print(f"  -> Saved: {out_txt.relative_to(image_folder)}")
                 else:
                     # Already in right place
                     if args.verbose:
-                        print(f"  -> Saved: {out_txt.relative_to(image_folder)}")
+                        with processed_lock:
+                            print(f"  -> Saved: {out_txt.relative_to(image_folder)}")
             else:
                 # Just keep in temp for later combined file generation
                 pass
@@ -252,23 +278,69 @@ Examples:
                 pass
 
             # Store OCR content for combined file (we'll collect all at the end)
-            # For now, save to a temp location or store in memory
             # Actually, let's save to a hidden temp file that we'll read later
             temp_content_file = ocr_output_dir / ".temp_contents" / f"{img_path.stem}.txt"
             temp_content_file.parent.mkdir(parents=True, exist_ok=True)
             temp_content_file.write_text(ocr_content, encoding="utf-8")
 
-            processed += 1
+            with processed_lock:
+                processed += 1
             if args.verbose:
                 size = len(ocr_content.encode('utf-8'))
-                print(f"  -> OK ({size} bytes)")
+                with processed_lock:
+                    print(f"  -> OK ({size} bytes)")
+
+            return (img_path, False, None)  # (path, skipped, error)
 
         except Exception as e:
-            failed += 1
-            print(f"[{i}/{len(images)}] Failed: {img_path.name} - {e}", file=sys.stderr)
+            error_msg = str(e)
+            with processed_lock:
+                failed += 1
+                print(f"[{i}/{total}] Failed: {img_path.name} - {error_msg}", file=sys.stderr)
             if args.verbose:
                 import traceback
-                traceback.print_exc()
+                with processed_lock:
+                    traceback.print_exc()
+            
+            # Save error marker file so combined file can show the error
+            try:
+                temp_content_file = ocr_output_dir / ".temp_contents" / f"{img_path.stem}.txt"
+                temp_content_file.parent.mkdir(parents=True, exist_ok=True)
+                # Save error info as a special marker
+                error_content = f"[OCR Failed / OCR 失败] {error_msg}"
+                temp_content_file.write_text(error_content, encoding="utf-8")
+            except Exception:
+                pass  # If we can't save error marker, that's okay
+            
+            return (img_path, False, error_msg)  # (path, skipped, error)
+
+    # Prepare arguments for parallel processing
+    if args.workers > 1:
+        print(f"Processing {total} images with {args.workers} parallel workers...")
+        # Add a small delay between worker starts to avoid overwhelming the website
+        import time
+        with ThreadPoolExecutor(max_workers=args.workers) as executor:
+            # Submit all tasks
+            futures = {
+                executor.submit(
+                    process_single_image,
+                    (i, img_path, args, image_folder, ocr_output_dir, tmp_dir)
+                ): (i, img_path)
+                for i, img_path in enumerate(images, 1)
+            }
+            # Wait for completion and handle results
+            for future in as_completed(futures):
+                try:
+                    future.result()  # This will raise any exceptions
+                except Exception as e:
+                    i, img_path = futures[future]
+                    with processed_lock:
+                        print(f"Unexpected error for {img_path.name}: {e}", file=sys.stderr)
+    else:
+        # Serial processing (original behavior)
+        print(f"Processing {total} images sequentially...")
+        for i, img_path in enumerate(images, 1):
+            process_single_image((i, img_path, args, image_folder, ocr_output_dir, tmp_dir))
 
     # Cleanup temp conversions
     try:
@@ -329,7 +401,11 @@ Examples:
         combined_lines.append("-" * 80)
         
         if txt_content:
-            combined_lines.append(txt_content)
+            # Check if it's an error marker
+            if txt_content.startswith("[OCR Failed / OCR 失败]"):
+                combined_lines.append(txt_content)
+            else:
+                combined_lines.append(txt_content)
         else:
             combined_lines.append("[OCR not completed / OCR 未完成]")
         

@@ -32,6 +32,8 @@ A simple batch OCR tool for extracting Tibetan text from images using [dharmamit
   - 自动将 TIF 转换为 PNG 以提高兼容性
 - **Headless Mode / 无界面模式**: Runs without browser window (quiet background processing)
   - 无浏览器窗口运行（安静的后台处理）
+- **Parallel Processing / 并行处理**: Process multiple images simultaneously for faster results (default: 4 workers)
+  - 同时处理多张图片以获得更快的结果（默认：4 个工作线程）
 
 ---
 
@@ -132,6 +134,26 @@ python ocr_simple_batch.py "C:\path\to\images" --force
 # 为大型/慢速图片增加超时时间（默认：15000ms）
 python ocr_simple_batch.py "C:\path\to\images" --timeout-ms 30000
 ```
+
+### Parallel Processing / 并行处理
+
+```powershell
+# Process multiple images in parallel for faster speed (default: 4 workers)
+# 并行处理多张图片以提高速度（默认：4 个工作线程）
+python ocr_simple_batch.py "C:\path\to\images" --workers 8
+
+# Disable parallel processing (use 1 worker for serial processing)
+# 禁用并行处理（使用 1 个工作线程进行串行处理）
+python ocr_simple_batch.py "C:\path\to\images" --workers 1
+```
+
+**Note / 注意**: 
+- Parallel processing significantly speeds up batch OCR, especially for large image sets
+  - 并行处理可显著加快批量 OCR 速度，特别是对于大量图片
+- Each worker uses a separate browser instance, so more workers = more memory usage
+  - 每个工作线程使用独立的浏览器实例，因此更多工作线程 = 更多内存使用
+- Recommended: 4-8 workers for most systems (adjust based on your CPU and memory)
+  - 推荐：大多数系统使用 4-8 个工作线程（根据你的 CPU 和内存调整）
 
 ---
 
