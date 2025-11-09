@@ -30,14 +30,23 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 
 OCR_URL_DEFAULT = "https://dharmamitra.org/zh-hant?view=ocr"
 TIBETAN_REGEX = re.compile(r"[\u0F00-\u0FFF]+")
-# Common error/empty page indicators (case-insensitive)
+# Real error indicators (not just "Result:" - that can be a progress message)
+# 真正的错误指示符（不仅仅是"Result:" - 那可能是进度消息）
 ERROR_INDICATORS = [
     r"白\s*页", r"空白", r"无内容", r"无文字", r"无文本",
-    r"Result:", r"Error", r"失败", r"错误",
-    r"未识别", r"识别失败", r"无法识别",
-    r"请上传", r"请选择", r"Please upload", r"Please select",
+    r"請求過多", r"请求过多", r"rate limit", r"too many requests",
+    r"Error", r"失败", r"錯誤", r"錯誤",
+    r"未识别", r"识别失败", r"無法識別", r"無法識別",
+    r"请上传", r"請上傳", r"请选择", r"請選擇", r"Please upload", r"Please select",
 ]
 ERROR_PATTERN = re.compile("|".join(ERROR_INDICATORS), re.IGNORECASE)
+# Progress/wait messages that should NOT trigger error (continue waiting)
+# 不应触发错误的进度/等待消息（继续等待）
+PROGRESS_INDICATORS = [
+    r"大型檔案", r"大型文件", r"large file", r"可能需要較長時間", r"可能需要较长时间",
+    r"processing", r"處理中", r"处理中", r"請稍候", r"请稍候", r"please wait",
+]
+PROGRESS_PATTERN = re.compile("|".join(PROGRESS_INDICATORS), re.IGNORECASE)
 DESKTOP_CHROME_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -317,7 +326,8 @@ def robust_upload_image(page, image_path: Path, timeout_ms: int = 12000) -> None
 def wait_for_tibetan_text(page, timeout_ms: int = 15000) -> str:
     """
     Wait until Tibetan characters appear in the page text, then return extracted Tibetan lines.
-    If error indicators are detected (e.g., "白页", "Result:"), raise an error immediately.
+    If real error indicators are detected (e.g., "白页", "請求過多"), raise an error immediately.
+    Progress messages (e.g., "大型檔案可能需要較長時間") are ignored and we continue waiting.
     """
     page.wait_for_timeout(500)
     elapsed = 0
@@ -328,13 +338,17 @@ def wait_for_tibetan_text(page, timeout_ms: int = 15000) -> str:
         except Exception:
             body_text = ""
         
-        # Check for error/empty page indicators first
+        # Check for real errors first (not progress messages)
         if ERROR_PATTERN.search(body_text):
-            # Extract the error message for better diagnostics
-            error_lines = [line.strip() for line in body_text.splitlines() 
-                          if ERROR_PATTERN.search(line) and line.strip()]
-            error_msg = "; ".join(error_lines[:3]) if error_lines else "Error indicator detected"
-            raise ValueError(f"OCR returned error/empty page indicator: {error_msg}")
+            # Make sure it's not just a progress message
+            if not PROGRESS_PATTERN.search(body_text):
+                # Extract the error message for better diagnostics
+                error_lines = [line.strip() for line in body_text.splitlines() 
+                              if ERROR_PATTERN.search(line) and line.strip()]
+                error_msg = "; ".join(error_lines[:3]) if error_lines else "Error indicator detected"
+                raise ValueError(f"OCR returned error: {error_msg}")
+            # If it's a progress message, continue waiting
+            # 如果是进度消息，继续等待
         
         # Check for Tibetan text
         if TIBETAN_REGEX.search(body_text):

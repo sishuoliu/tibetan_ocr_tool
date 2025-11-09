@@ -153,8 +153,20 @@ Examples:
     parser.add_argument(
         "--workers",
         type=int,
-        default=4,
-        help="Number of parallel workers for OCR processing (default: 4)",
+        default=1,
+        help="Number of parallel workers for OCR processing (default: 1, recommended: 1 to avoid rate limiting)",
+    )
+    parser.add_argument(
+        "--retry-rate-limit",
+        type=int,
+        default=3,
+        help="Number of retries for rate limit errors (default: 3)",
+    )
+    parser.add_argument(
+        "--retry-delay",
+        type=int,
+        default=5,
+        help="Delay in seconds before retrying after rate limit error (default: 5)",
     )
     args = parser.parse_args(argv)
 
@@ -238,18 +250,43 @@ Examples:
             # Convert TIF to PNG if needed
             upload_path = convert_image_for_upload(img_path, tmp_dir, verbose=args.verbose)
 
-            # Run OCR (headless mode)
+            # Run OCR (headless mode) with retry logic for rate limiting
             # Use a temp directory for OCR output, we'll handle file placement ourselves
             temp_ocr_dir = ocr_output_dir / ".temp_ocr"
             temp_ocr_dir.mkdir(parents=True, exist_ok=True)
             
-            result_txt = ocr_single_image(
-                image_path=upload_path,
-                output_dir=temp_ocr_dir,
-                url=args.url,
-                headless=True,  # No browser window
-                timeout_ms=args.timeout_ms,
-            )
+            # Retry logic for rate limiting
+            import time
+            last_error = None
+            for retry in range(args.retry_rate_limit + 1):
+                try:
+                    result_txt = ocr_single_image(
+                        image_path=upload_path,
+                        output_dir=temp_ocr_dir,
+                        url=args.url,
+                        headless=True,  # No browser window
+                        timeout_ms=args.timeout_ms,
+                    )
+                    # Success - break out of retry loop
+                    break
+                except Exception as e:
+                    error_msg = str(e)
+                    # Check if it's a rate limit error
+                    if "請求過多" in error_msg or "请求过多" in error_msg or "rate limit" in error_msg.lower():
+                        if retry < args.retry_rate_limit:
+                            wait_time = args.retry_delay * (retry + 1)  # Exponential backoff
+                            if args.verbose:
+                                with processed_lock:
+                                    print(f"  ⚠️  Rate limit detected, waiting {wait_time}s before retry {retry + 1}/{args.retry_rate_limit}...")
+                            time.sleep(wait_time)
+                            last_error = e
+                            continue
+                        else:
+                            # Out of retries
+                            raise ValueError(f"Rate limit error after {args.retry_rate_limit} retries: {error_msg}")
+                    else:
+                        # Not a rate limit error, don't retry
+                        raise
 
             # Read OCR result
             ocr_content = result_txt.read_text(encoding="utf-8", errors="ignore")
@@ -317,6 +354,8 @@ Examples:
     # Prepare arguments for parallel processing
     if args.workers > 1:
         print(f"Processing {total} images with {args.workers} parallel workers...")
+        print(f"  ⚠️  Warning: Using multiple workers may trigger rate limiting (請求過多). Recommended: --workers 1")
+        print(f"  警告：使用多个工作线程可能触发速率限制（請求過多）。推荐：--workers 1")
         # Add a small delay between worker starts to avoid overwhelming the website
         import time
         with ThreadPoolExecutor(max_workers=args.workers) as executor:
