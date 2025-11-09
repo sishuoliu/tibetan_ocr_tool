@@ -59,3 +59,7 @@ ocr/
 # settings.json
 # .env
 
+# Developer documentation (not needed for end users)
+RELEASE_GUIDE.md
+GIT_PUSH_COMMANDS.md
+
