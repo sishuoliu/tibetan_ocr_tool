@@ -43,13 +43,104 @@ A simple batch OCR tool for extracting Tibetan text from images using [dharmamit
 
 ## Installation / 安装
 
-### 1. Install Python Dependencies / 安装 Python 依赖
+### 1. Create and Activate Virtual Environment / 创建并激活虚拟环境（强烈推荐）
+
+**Why use a virtual environment? / 为什么使用虚拟环境？**
+A virtual environment isolates project dependencies and avoids conflicts with your system Python environment. This is a Python best practice.
+
+虚拟环境可以隔离项目依赖，避免与系统 Python 环境冲突。这是 Python 开发的最佳实践。
+
+**Windows (PowerShell):**
+```powershell
+# 1. Verify Python is installed
+# 确认已安装 Python
+python --version
+
+# 2. Navigate to project directory
+# 进入项目目录
+cd tibetan-ocr-tool
+
+# 3. Create virtual environment (creates .venv folder in current directory)
+# 创建虚拟环境（会在当前目录生成 .venv 文件夹）
+python -m venv .venv
+
+# 4. Activate virtual environment
+# 激活虚拟环境
+.\.venv\Scripts\Activate.ps1
+
+# If you encounter execution policy error, run this first (requires admin):
+# 如果遇到执行策略限制错误，先运行（需要管理员权限）:
+# Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+**Windows (Command Prompt):**
+```cmd
+# 1. Verify Python is installed
+python --version
+
+# 2. Navigate to project directory
+cd tibetan-ocr-tool
+
+# 3. Create virtual environment
+python -m venv .venv
+
+# 4. Activate virtual environment
+.venv\Scripts\activate.bat
+```
+
+**Linux/Mac:**
+```bash
+# 1. Verify Python is installed
+# 确认已安装 Python
+python3 --version
+
+# 2. Navigate to project directory
+# 进入项目目录
+cd tibetan-ocr-tool
+
+# 3. Create virtual environment
+# 创建虚拟环境
+python3 -m venv .venv
+
+# 4. Activate virtual environment
+# 激活虚拟环境
+source .venv/bin/activate
+```
+
+**How to confirm virtual environment is activated? / 如何确认虚拟环境已激活？**
+After activation, you'll see `(.venv)` at the beginning of your command prompt, for example:
+激活后，命令行提示符前会显示 `(.venv)`，例如：
+```
+(.venv) PS C:\Users\...\tibetan-ocr-tool>
+```
+
+**Deactivate virtual environment / 退出虚拟环境：**
+```bash
+deactivate
+```
+
+### 2. Install Python Dependencies / 安装 Python 依赖
+
+In the activated virtual environment, run:
+在激活的虚拟环境中运行：
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Install Playwright Browser / 安装 Playwright 浏览器
+**Windows users note / Windows 用户注意事项：**
+- If `pip` command is not available, try `python -m pip install -r requirements.txt`
+- 如果 `pip` 命令不可用，尝试 `python -m pip install -r requirements.txt`
+- If you encounter permission errors, make sure the virtual environment is activated
+- 如果遇到权限错误，确保虚拟环境已激活
+
+**Linux/Mac users note / Linux/Mac 用户注意事项：**
+- If `pip` command is not available, try `python3 -m pip install -r requirements.txt`
+- 如果 `pip` 命令不可用，尝试 `python3 -m pip install -r requirements.txt`
+- Some systems may require `sudo` (but usually not needed in virtual environment)
+- 某些系统可能需要 `sudo` 权限（但在虚拟环境中通常不需要）
+
+### 3. Install Playwright Browser / 安装 Playwright 浏览器
 
 ```bash
 python -m playwright install chromium
@@ -267,6 +358,52 @@ This combined file makes it easy to:
 
 ## Troubleshooting / 故障排除
 
+<<<<<<< HEAD
+=======
+### "No OCR backend available" / "没有可用的 OCR 后端"
+
+Make sure you have installed either:
+- Tesseract OCR (recommended for Tibetan)
+- PaddleOCR (optional)
+
+确保已安装以下之一：
+- Tesseract OCR（推荐用于藏文）
+- PaddleOCR（可选）
+
+### "Tesseract not found" / "找不到 Tesseract"
+
+- Make sure Tesseract is installed and added to your system PATH
+- On Windows, you may need to specify the Tesseract path in your code or environment
+
+确保 Tesseract 已安装并添加到系统 PATH
+在 Windows 上，可能需要在代码或环境中指定 Tesseract 路径
+
+### "Virtual environment activation failed" / "虚拟环境激活失败"
+
+**Windows PowerShell error / Windows PowerShell 错误：**
+```
+无法加载文件 .venv\Scripts\Activate.ps1，因为在此系统上禁止运行脚本
+```
+
+**Solution / 解决方案：**
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+### "Dependencies installation failed" / "依赖安装失败"
+
+**Solution / 解决方案：**
+1. Make sure virtual environment is activated
+   确保虚拟环境已激活
+2. Upgrade pip: `python -m pip install --upgrade pip` or `python3 -m pip install --upgrade pip`
+   升级 pip：`python -m pip install --upgrade pip` 或 `python3 -m pip install --upgrade pip`
+3. Use a mirror source if needed (e.g., Tsinghua mirror):
+   如需要，使用国内镜像源（如清华镜像）：
+   ```bash
+   pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+   ```
+
+>>>>>>> c6f6671 (docs: 娣诲姞铏氭嫙鐜鍒涘缓璇存槑鍒?README)
 ### "No images found" / "未找到图片"
 
 - Check that your folder path is correct
