@@ -427,6 +427,34 @@ pip install playwright
 python -m playwright install chromium
 ```
 
+### "Executable doesn't exist" / "可执行文件不存在"
+
+**Error message / 错误信息：**
+```
+BrowserType.launch: Executable doesn't exist at ...
+Looks like Playwright was just installed or updated.
+Please run the following command to download new browsers:
+    playwright install
+```
+
+**Solution / 解决方案：**
+
+This error occurs when Playwright Python package is installed but the browser binaries are missing. Run:
+此错误发生在 Playwright Python 包已安装但浏览器二进制文件缺失时。运行：
+
+```bash
+# In your activated virtual environment / 在激活的虚拟环境中
+python -m playwright install chromium
+```
+
+**Note / 注意：**
+- Make sure you're in the activated virtual environment when running this command
+- 运行此命令时确保在激活的虚拟环境中
+- This command downloads the Chromium browser (about 200-300 MB)
+- 此命令会下载 Chromium 浏览器（约 200-300 MB）
+- The download only needs to be done once per environment
+- 每个环境只需下载一次
+
 ### "Pillow not available" / "Pillow 不可用"
 
 ```bash
